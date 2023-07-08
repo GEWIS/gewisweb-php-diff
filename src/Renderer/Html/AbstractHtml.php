@@ -98,6 +98,16 @@ abstract class AbstractHtml extends AbstractRenderer
             $changes[] = $change;
         }
 
+        // If the old and new texts are equal then there are no changes. However, we always need changes, so we
+        // construct a "fake" `$changes` containing the old text.
+        if (empty($changes)) {
+            $block = $this->getDefaultBlock(SequenceMatcher::OP_EQ, 0, 0);
+            $block['old']['lines'] = $old;
+            $block['new']['lines'] = $new;
+
+            $changes[][] = $block;
+        }
+
         if (static::AUTO_FORMAT_CHANGES) {
             $this->formatChanges($changes);
         }
@@ -255,6 +265,11 @@ abstract class AbstractHtml extends AbstractRenderer
      */
     protected function formatStringFromLines(string $string): string
     {
+        // Always add `<br>` to empty lines to allow selecting empty lines.
+        if ('' === $string) {
+            return '<br>';
+        }
+
         if (!$this->options['spaceToHtmlTag']) {
             $string = $this->expandTabs($string, $this->options['tabSize']);
         }
@@ -269,7 +284,12 @@ abstract class AbstractHtml extends AbstractRenderer
             $string = $this->htmlReplaceSpacesToHtmlTag($string);
         }
 
-        return $string;
+        // Add `<br>` between line separators to allow selecting combined empty lines.
+        return str_replace(
+            RendererConstant::IMPLODE_DELIMITER,
+            '<br>' . RendererConstant::IMPLODE_DELIMITER,
+            $string,
+        );
     }
 
     /**

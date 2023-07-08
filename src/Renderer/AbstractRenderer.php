@@ -185,9 +185,18 @@ abstract class AbstractRenderer implements RendererInterface
     {
         $this->changesAreRaw = true;
         // the "no difference" situation may happen frequently
-        return $differ->getOldNewComparison() === 0
-            ? $this->getResultForIdenticals()
-            : $this->renderWorker($differ);
+
+        // Make sure that we always render an output, even when the old and new
+        // are the same. This is necessary for GEWISWEB to prevent having to
+        // add additional checks.
+        //
+        // Original:
+        // return $differ->getOldNewComparison() === 0
+        //     ? $this->getResultForIdenticals()
+        //     : $this->renderWorker($differ);
+        //
+        // Patched:
+        return $this->renderWorker($differ);
     }
 
     /**
