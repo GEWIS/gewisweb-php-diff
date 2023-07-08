@@ -1,0 +1,90 @@
+From cb13bf9e21cd8ac1ac93bdfd10c714d3f86d49a9 Mon Sep 17 00:00:00 2001
+From: Tom Udding <tomudding@users.noreply.github.com>
+Date: Sun, 9 Jul 2023 00:17:34 +0200
+Subject: [PATCH] Default to always render diff, even without differences
+
+Necessary for GEWISWEB. Achieved by constructing a change block of
+`SequenceMatcher::OP_EQ` containing all lines. To ensure that empty
+lines are always selectable/can be copied we replace them with the
+`<br>` tag.
+---
+ src/Renderer/AbstractRenderer.php  | 15 ++++++++++++---
+ src/Renderer/Html/AbstractHtml.php | 22 +++++++++++++++++++++-
+ 2 files changed, 33 insertions(+), 4 deletions(-)
+
+diff --git a/src/Renderer/AbstractRenderer.php b/src/Renderer/AbstractRenderer.php
+index d9806a3..3436863 100644
+--- a/src/Renderer/AbstractRenderer.php
++++ b/src/Renderer/AbstractRenderer.php
+@@ -185,9 +185,18 @@ abstract class AbstractRenderer implements RendererInterface
+     {
+         $this->changesAreRaw = true;
+         // the "no difference" situation may happen frequently
+-        return $differ->getOldNewComparison() === 0
+-            ? $this->getResultForIdenticals()
+-            : $this->renderWorker($differ);
++
++        // Make sure that we always render an output, even when the old and new
++        // are the same. This is necessary for GEWISWEB to prevent having to
++        // add additional checks.
++        //
++        // Original:
++        // return $differ->getOldNewComparison() === 0
++        //     ? $this->getResultForIdenticals()
++        //     : $this->renderWorker($differ);
++        //
++        // Patched:
++        return $this->renderWorker($differ);
+     }
+ 
+     /**
+diff --git a/src/Renderer/Html/AbstractHtml.php b/src/Renderer/Html/AbstractHtml.php
+index 9a576e6..4588b4c 100644
+--- a/src/Renderer/Html/AbstractHtml.php
++++ b/src/Renderer/Html/AbstractHtml.php
+@@ -98,6 +98,16 @@ abstract class AbstractHtml extends AbstractRenderer
+             $changes[] = $change;
+         }
+ 
++        // If the old and new texts are equal then there are no changes. However, we always need changes, so we
++        // construct a "fake" `$changes` containing the old text.
++        if (empty($changes)) {
++            $block = $this->getDefaultBlock(SequenceMatcher::OP_EQ, 0, 0);
++            $block['old']['lines'] = $old;
++            $block['new']['lines'] = $new;
++
++            $changes[][] = $block;
++        }
++
+         if (static::AUTO_FORMAT_CHANGES) {
+             $this->formatChanges($changes);
+         }
+@@ -255,6 +265,11 @@ abstract class AbstractHtml extends AbstractRenderer
+      */
+     protected function formatStringFromLines(string $string): string
+     {
++        // Always add `<br>` to empty lines to allow selecting empty lines.
++        if ('' === $string) {
++            return '<br>';
++        }
++
+         if (!$this->options['spaceToHtmlTag']) {
+             $string = $this->expandTabs($string, $this->options['tabSize']);
+         }
+@@ -269,7 +284,12 @@ abstract class AbstractHtml extends AbstractRenderer
+             $string = $this->htmlReplaceSpacesToHtmlTag($string);
+         }
+ 
+-        return $string;
++        // Add `<br>` between line separators to allow selecting combined empty lines.
++        return str_replace(
++            RendererConstant::IMPLODE_DELIMITER,
++            '<br>' . RendererConstant::IMPLODE_DELIMITER,
++            $string,
++        );
+     }
+ 
+     /**
+-- 
+2.41.0
+
